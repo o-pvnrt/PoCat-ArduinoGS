@@ -65,7 +65,7 @@ typedef enum {
 } telecommandIDS;
 
 uint8_t txpacket[BUFFER_SIZE];
-uint8_t rxpacket[BUFFER_SIZE];
+uint8_t RxData[BUFFER_SIZE];
 
 static RadioEvents_t RadioEvents;
 
@@ -76,7 +76,8 @@ volatile int i=0;
 bool lora_idle = true;
 int senddata_TLC_sent=0;
 
-uint8_t tcpacket[]={0xC8,0x9D,0x00,0x00,0x00,0x00,0x03,0x83,0x1E,0x19,0xDC,0x63,0x53,0xC4};
+uint8_t tcpacket[48]={0xC8,0x9D,0x00,0x00,0x00,0x00,0x03,0x83,0x1E,0x19,0xDC,0x63,0x53,0xC4};
+uint8_t Encoded_Packet[48];
 
 void setup() {
     Serial.begin(115200);
@@ -108,7 +109,8 @@ void loop()
     tcnumber=tcinput.toInt();
     printf("Test");
     SendTC(tcnumber);
-    delay(500);
+    delay(1800);
+  
   }
   
   if(lora_idle)
@@ -259,7 +261,8 @@ void SendTC(uint8_t TC) {
           printf("Unknown command\n");
           break;
   }
-  Radio.Send(tcpacket,sizeof(tcpacket));
+  interleave((uint8_t *) tcpacket, (uint8_t *) Encoded_Packet);
+  Radio.Send(Encoded_Packet,sizeof(Encoded_Packet));
 }
 
 void printHex(uint8_t num) {
@@ -269,14 +272,13 @@ void printHex(uint8_t num) {
 }
 void OnRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
 {
-    rssi=rssi;
-    rxSize=size;
-    memcpy(rxpacket, payload, size );
-    rxpacket[size]='\0';
+    memset(RxData, 0, size);
     turnOnRGB(COLOR_RECEIVED,0);
+    deinterleave((uint8_t*) payload,(uint8_t*) RxData);  
+    
     Radio.Sleep( );
     for(i=0; i<size; i++){
-      printHex(rxpacket[i]);
+      printHex(RxData[i]);
     }
     Serial.println();
     lora_idle = true;
@@ -284,6 +286,24 @@ void OnRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
 
 void OnTxDone()
 {
-  //Serial.print("Telecommand Sent");
+  lora_idle = true;;
   
+}
+
+void interleave(uint8_t *input, uint8_t *output) {
+    for (int j = 0; j < 48; j++) {
+        int row = j % 6;
+        int column = j / 6;
+        int original_index = row * 8 + column;
+        output[j] = input[original_index];
+    }
+}
+
+void deinterleave(uint8_t *input, uint8_t *output) {
+    for (int i = 0; i < 48; i++) {
+        int row = i / 8;
+        int column = i % 8;
+        int interleaved_index = column * 6 + row;
+        output[i] = input[interleaved_index];
+    }
 }
