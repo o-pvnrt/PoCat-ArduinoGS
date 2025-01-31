@@ -65,7 +65,7 @@ typedef enum {
 } telecommandIDS;
 
 uint8_t txpacket[BUFFER_SIZE];
-uint8_t RxData[BUFFER_SIZE];
+uint8_t RxData[48];
 
 static RadioEvents_t RadioEvents;
 
@@ -262,7 +262,7 @@ void SendTC(uint8_t TC) {
           printf("Unknown command\n");
           break;
   }
-  interleave((uint8_t *) tcpacket, (uint8_t *) Encoded_Packet);
+  interleave((uint8_t *) tcpacket, (uint8_t *) Encoded_Packet,sizeof(tcpacket));
   Radio.Send(Encoded_Packet,sizeof(Encoded_Packet));
 }
 
@@ -273,9 +273,9 @@ void printHex(uint8_t num) {
 }
 void OnRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
 {
-    memset(RxData, 0, size);
+    memset(RxData, 0, sizeof(RxData));
     turnOnRGB(COLOR_RECEIVED,0);
-    deinterleave((uint8_t*) payload,(uint8_t*) RxData);  
+    deinterleave((uint8_t*) payload,(uint8_t*) RxData, sizeof(RxData));  
     
     Radio.Sleep( );
     for(i=0; i<size; i++){
@@ -291,20 +291,37 @@ void OnTxDone()
   
 }
 
-void interleave(uint8_t *input, uint8_t *output) {
-    for (int j = 0; j < 48; j++) {
-        int row = j % 6;
-        int column = j / 6;
-        int original_index = row * 8 + column;
-        output[j] = input[original_index];
+void interleave(uint8_t *input, uint8_t *output, int size) {
+    if (size <= 0) return;  // Handle invalid size
+
+    // Determine matrix dimensions
+    int rows = (int)sqrt(size);  // Number of rows (rounded down)
+    if (rows == 0) rows = 1;     // Ensure at least 1 row
+    int cols = (size + rows - 1) / rows;  // Number of columns
+
+    // Interleave by writing row-wise and reading column-wise
+    for (int j = 0; j < size; j++) {
+        int row = j % rows;      // Row index in the matrix
+        int col = j / rows;      // Column index in the matrix
+        int input_index = row * cols + col;  // Map to input array
+        output[j] = (input_index < size) ? input[input_index] : 0;  // Handle padding
     }
 }
 
-void deinterleave(uint8_t *input, uint8_t *output) {
-    for (int i = 0; i < 48; i++) {
-        int row = i / 8;
-        int column = i % 8;
-        int interleaved_index = column * 6 + row;
-        output[i] = input[interleaved_index];
+void deinterleave(uint8_t *input, uint8_t *output, int size) {
+    if (size <= 0) return;  // Handle invalid size
+
+    // Determine matrix dimensions
+    int rows = (int)sqrt(size);  // Number of rows (rounded down)
+    if (rows == 0) rows = 1;     // Ensure at least 1 row
+    int cols = (size + rows - 1) / rows;  // Number of columns
+
+    // Deinterleave by writing column-wise and reading row-wise
+    for (int i = 0; i < size; i++) {
+        int row = i / cols;      // Row index in the matrix
+        int col = i % cols;      // Column index in the matrix
+        int input_index = col * rows + row;  // Map to input array
+        output[i] = (input_index < size) ? input[input_index] : 0;  // Handle padding
     }
 }
+
