@@ -123,7 +123,7 @@ void loop()
 
 
 void SendTC(uint8_t TC) {
-  tcpacket[2]=20;
+  tcpacket[2]=TC;
   switch (TC) {
       case PING:
           printf("Executing: ping\n");
@@ -158,7 +158,8 @@ void SendTC(uint8_t TC) {
           printf("Executing: comms upload params\n");
           tcpacket[3]=10; //Define rxtime in ms/100
           tcpacket[4]=10; //Define sleeptime in ms/100
-          tcpacket[5]=0; //CADMODE --> 1==ON 0==OFF
+          tcpacket[5]=64; //CADMODE --> 0 to 128==ON 128 to 255==OFF
+          tcpacket[6]=255; //Packet window for Payload data sending.
           break;
       case UPLOAD_UNIX_TIME:
           printf("Executing: upload UNIX time TBD\n");
