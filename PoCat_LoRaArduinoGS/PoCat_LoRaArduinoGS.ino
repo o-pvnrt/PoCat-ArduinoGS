@@ -273,16 +273,10 @@ void SendTC(uint8_t TC) {
   }
 
   memcpy(TxData,tcpacket,totalpacketsize);
-  for(i=0; i<totalpacketsize; i++){
-      printHex(TxData[i]);
-  }
   Serial.println();
 	interleave((uint8_t*) TxData, totalpacketsize);
 	memcpy(Encoded_Packet,TxData,totalpacketsize);
 	free(TxData);
-  for(i=0; i<totalpacketsize; i++){
-      printHex(Encoded_Packet[i]);
-  }
   Serial.println();
   Radio.Send(Encoded_Packet,sizeof(Encoded_Packet));
 }
