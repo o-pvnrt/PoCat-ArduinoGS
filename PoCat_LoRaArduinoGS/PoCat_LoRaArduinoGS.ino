@@ -64,7 +64,7 @@ typedef enum {
     OBC_DEBUG_MODE
 } telecommandIDS;
 
-uint8_t txpacket[BUFFER_SIZE];
+uint8_t txpacket[48];
 uint8_t RxData[48];
 
 static RadioEvents_t RadioEvents;
@@ -78,6 +78,8 @@ int senddata_TLC_sent=0;
 
 uint8_t tcpacket[48]={0xC8,0x9D,0x00,0x00,0x00,0x00,0x03,0x83,0x1E,0x19,0xDC,0x63,0x53,0xC4};
 uint8_t Encoded_Packet[48];
+
+uint8_t totalpacketsize=0;
 
 void setup() {
     Serial.begin(115200);
@@ -262,7 +264,26 @@ void SendTC(uint8_t TC) {
           printf("Unknown command\n");
           break;
   }
-  interleave((uint8_t *) tcpacket, (uint8_t *) Encoded_Packet,sizeof(tcpacket));
+
+  totalpacketsize=48;
+  uint8_t *TxData = (uint8_t *) malloc(totalpacketsize);
+  
+  if (TxData == NULL) {
+       exit(EXIT_FAILURE);
+  }
+
+  memcpy(TxData,tcpacket,totalpacketsize);
+  for(i=0; i<totalpacketsize; i++){
+      printHex(TxData[i]);
+  }
+  Serial.println();
+	interleave((uint8_t*) TxData, totalpacketsize);
+	memcpy(Encoded_Packet,TxData,totalpacketsize);
+	free(TxData);
+  for(i=0; i<totalpacketsize; i++){
+      printHex(Encoded_Packet[i]);
+  }
+  Serial.println();
   Radio.Send(Encoded_Packet,sizeof(Encoded_Packet));
 }
 
@@ -273,11 +294,21 @@ void printHex(uint8_t num) {
 }
 void OnRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
 {
-    memset(RxData, 0, sizeof(RxData));
     turnOnRGB(COLOR_RECEIVED,0);
-    deinterleave((uint8_t*) payload,(uint8_t*) RxData, sizeof(RxData));  
-    
-    Radio.Sleep( );
+
+  	memset(RxData,0,sizeof(RxData));
+    uint8_t *RxPacket =(uint8_t *) malloc(size);
+    if (RxPacket == NULL) {
+        exit(EXIT_FAILURE);
+    }
+
+    memcpy(RxPacket,payload,size);
+
+    deinterleave((uint8_t*) RxPacket,size);
+    memcpy(RxData,RxPacket,size);
+
+    free(RxPacket);    
+    Radio.Sleep();
     for(i=0; i<size; i++){
       printHex(RxData[i]);
     }
@@ -291,37 +322,56 @@ void OnTxDone()
   
 }
 
-void interleave(uint8_t *input, uint8_t *output, int size) {
-    if (size <= 0) return;  // Handle invalid size
-
-    // Determine matrix dimensions
-    int rows = (int)sqrt(size);  // Number of rows (rounded down)
-    if (rows == 0) rows = 1;     // Ensure at least 1 row
-    int cols = (size + rows - 1) / rows;  // Number of columns
-
-    // Interleave by writing row-wise and reading column-wise
-    for (int j = 0; j < size; j++) {
-        int row = j % rows;      // Row index in the matrix
-        int col = j / rows;      // Column index in the matrix
-        int input_index = row * cols + col;  // Map to input array
-        output[j] = (input_index < size) ? input[input_index] : 0;  // Handle padding
+void interleave(uint8_t *inputarr, int size) {
+    // Check that the size is a multiple of 6.
+    if (size % 6 != 0) {
+        return;
     }
+
+    int groupSize = size / 6;
+
+    // Allocate temporary array to hold the interleaved result.
+    uint8_t *temp =(uint8_t *) malloc(size * sizeof(uint8_t));
+    if (temp == NULL) {
+        exit(EXIT_FAILURE);
+    }
+
+    // For each index within the groups,
+    // pick one element from each of the 6 groups.
+    for (int i = 0; i < groupSize; i++) {
+        for (int j = 0; j < 6; j++) {
+            temp[i * 6 + j] = inputarr[j * groupSize + i];
+        }
+    }
+
+    // Copy the interleaved elements back into the original array.
+    memcpy(inputarr, temp, size * sizeof(uint8_t));
+
+    free(temp);
 }
 
-void deinterleave(uint8_t *input, uint8_t *output, int size) {
-    if (size <= 0) return;  // Handle invalid size
-
-    // Determine matrix dimensions
-    int rows = (int)sqrt(size);  // Number of rows (rounded down)
-    if (rows == 0) rows = 1;     // Ensure at least 1 row
-    int cols = (size + rows - 1) / rows;  // Number of columns
-
-    // Deinterleave by writing column-wise and reading row-wise
-    for (int i = 0; i < size; i++) {
-        int row = i / cols;      // Row index in the matrix
-        int col = i % cols;      // Column index in the matrix
-        int input_index = col * rows + row;  // Map to input array
-        output[i] = (input_index < size) ? input[input_index] : 0;  // Handle padding
+void deinterleave(uint8_t *inputarr, int size) {
+    if (size % 6 != 0) {
+        return;
     }
+
+    int groupSize = size / 6;
+    uint8_t *temp =(uint8_t *) malloc(size * sizeof(uint8_t));
+    if (temp == NULL) {
+        exit(EXIT_FAILURE);
+    }
+
+    // Reconstruct the original groups.
+    // For each group index i and for each group j:
+    // The interleaved array holds the jth element of group j at position i*6 + j.
+    // We restore it to temp[ j * groupSize + i ].
+    for (int i = 0; i < groupSize; i++) {
+        for (int j = 0; j < 6; j++) {
+            temp[j * groupSize + i] = inputarr[i * 6 + j];
+        }
+    }
+
+    memcpy(inputarr, temp, size * sizeof(uint8_t));
+    free(temp);
 }
 
