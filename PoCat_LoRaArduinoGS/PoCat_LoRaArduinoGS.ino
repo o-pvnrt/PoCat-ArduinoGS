@@ -5,7 +5,7 @@
 #define LoraWan_RGB 0
 #endif
 #define RF_FREQUENCY                                868000000 // Hz
-#define TX_OUTPUT_POWER                             0        // dBm
+#define TX_OUTPUT_POWER                             10        // dBm
 #define LORA_BANDWIDTH                              0         // [0: 125 kHz,
                                                               //  1: 250 kHz,
                                                               //  2: 500 kHz,
